@@ -15,6 +15,29 @@ GROUPS = {"DIRECT": "DIRECT", "REJECT": "REJECT", "PROXY": "🚀 节点选择"}
 RULE_TYPES = ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "IP-CIDR", "IP-CIDR6", "GEOIP", "PROCESS-NAME", "PROCESS-PATH", "DST-PORT", "SRC-IP-CIDR", "SRC-PORT", "NETWORK")
 
 
+LIST_GROUPS = {"DIRECT": "🎯 全球直连", "REJECT": "🛑 全球拦截", "PROXY": "🚀 节点选择"}
+
+
+def normalize_list_filenames():
+    """Rename local .list files to Or + UpperCamelCase; fail on collisions."""
+    for folder in LIST_GROUPS:
+        directory = ROOT / "rulesets" / folder
+        if not directory.is_dir():
+            continue
+        for file in sorted(directory.rglob("*.list")):
+            if file.is_symlink() or not file.is_file():
+                continue
+            # Only add prefix when absent. Capitalize first char to match UpperCamelCase.
+            stem = file.stem
+            renamed = stem if stem.startswith("Or") else "Or" + stem[:1].upper() + stem[1:]
+            target = file.with_name(renamed + ".list")
+            if target != file:
+                if target.exists():
+                    raise FileExistsError(f"Ruleset filename collision: {file} -> {target}")
+                file.rename(target)
+                print(f"Renamed {file.relative_to(ROOT)} -> {target.relative_to(ROOT)}")
+
+
 def rulesets():
     entries = []
     for folder, group in GROUPS.items():
@@ -24,7 +47,6 @@ def rulesets():
         for file in sorted(directory.rglob("*.yaml")) + sorted(directory.rglob("*.yml")):
             if file.is_symlink() or not file.is_file():
                 continue
-            # Lightweight format check without external dependencies.
             content = file.read_text(encoding="utf-8")
             if not re.search(r"(?m)^payload:\s*$", content):
                 raise ValueError(f"Invalid rule-provider payload: {file}")
@@ -33,8 +55,20 @@ def rulesets():
             relative = file.relative_to(ROOT).as_posix()
             url = f"https://raw.githubusercontent.com/{REPOSITORY}/{REF}/{relative}"
             entries.append(f"ruleset={group},clash-classic:{url},{INTERVAL}")
+    for folder, group in LIST_GROUPS.items():
+        directory = ROOT / "rulesets" / folder
+        if not directory.is_dir():
+            continue
+        for file in sorted(directory.rglob("*.list")):
+            if file.is_symlink() or not file.is_file():
+                continue
+            if not any(line.strip() and not line.lstrip().startswith("#") for line in file.read_text(encoding="utf-8").splitlines()):
+                raise ValueError(f"Empty .list ruleset: {file}")
+            relative = file.relative_to(ROOT).as_posix()
+            url = f"https://raw.githubusercontent.com/{REPOSITORY}/{REF}/{relative}"
+            entries.append(f"ruleset={group},{url}")
     if not entries:
-        raise ValueError("No rule files found under rules/DIRECT, rules/REJECT or rules/PROXY")
+        raise ValueError("No rulesets under rules/ or rulesets/")
     return entries
 
 
@@ -55,13 +89,15 @@ def merge(upstream):
 
 
 def main():
+    normalize_list_filenames()
     with urlopen(SOURCE, timeout=40) as response:
         upstream = response.read().decode("utf-8-sig")
+    entries = rulesets()
     generated = merge(upstream)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:
         OUTPUT.write_text(generated, encoding="utf-8")
-        print(f"Updated {OUTPUT.relative_to(ROOT)} with {len(rulesets())} remote rulesets")
+        print(f"Updated {OUTPUT.relative_to(ROOT)} with {len(entries)} remote rulesets")
     else:
         print("No changes")
 
