@@ -25,26 +25,40 @@ def add_manual_groups(content):
         "🚀 手动切换3",
     ]
 
-    # 给主策略组追加 3 个新手动组
     lines = content.splitlines()
-    for i, line in enumerate(lines):
-        if line.startswith("custom_proxy_group=🚀 节点选择`select`"):
-            for group in groups:
-                reference = f"`[]{group}"
-                if reference not in line:
-                    line += reference
-            lines[i] = line
-            break
-    else:
-        raise ValueError("找不到 🚀 节点选择 策略组")
+    result = []
 
-    # 创建 3 个独立的手动组
-    for group in groups:
-        definition = f"custom_proxy_group={group}`select`.*"
-        if definition not in lines:
-            lines.append(definition)
+    for line in lines:
+        if line.startswith("custom_proxy_group="):
+            name = line.split("=", 1)[1].split("`", 1)[0]
 
-    return "\n".join(lines) + "\n"
+            # 不修改手动切换组自身，避免循环引用
+            if name not in groups and name != "🚀 手动切换":
+                if "`select`" in line:
+                    for group in groups:
+                        reference = f"`[]{group}"
+                        if reference not in line:
+                            line += reference
+
+        result.append(line)
+
+    # 在现有策略组末尾添加三个新组
+    definitions = [
+        f"custom_proxy_group={group}`select`.*"
+        for group in groups
+    ]
+
+    # 插入最后一个 custom_proxy_group 后面
+    last_index = max(
+        i for i, line in enumerate(result)
+        if line.startswith("custom_proxy_group=")
+    )
+
+    for definition in reversed(definitions):
+        if definition not in result:
+            result.insert(last_index + 1, definition)
+
+    return "\n".join(result) + "\n"
 
 
 def normalize_list_filenames():
