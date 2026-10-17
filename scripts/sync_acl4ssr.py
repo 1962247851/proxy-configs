@@ -18,6 +18,35 @@ RULE_TYPES = ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "IP-C
 LIST_GROUPS = {"DIRECT": "🎯 全球直连", "REJECT": "🛑 全球拦截", "PROXY": "🚀 节点选择"}
 
 
+def add_manual_groups(content):
+    groups = [
+        "🚀 手动切换1",
+        "🚀 手动切换2",
+        "🚀 手动切换3",
+    ]
+
+    # 给主策略组追加 3 个新手动组
+    lines = content.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("custom_proxy_group=🚀 节点选择`select`"):
+            for group in groups:
+                reference = f"`[]{group}"
+                if reference not in line:
+                    line += reference
+            lines[i] = line
+            break
+    else:
+        raise ValueError("找不到 🚀 节点选择 策略组")
+
+    # 创建 3 个独立的手动组
+    for group in groups:
+        definition = f"custom_proxy_group={group}`select`.*"
+        if definition not in lines:
+            lines.append(definition)
+
+    return "\n".join(lines) + "\n"
+
+
 def normalize_list_filenames():
     """Rename local .list files to Or + UpperCamelCase; fail on collisions."""
     for folder in LIST_GROUPS:
@@ -93,7 +122,10 @@ def main():
     with urlopen(SOURCE, timeout=40) as response:
         upstream = response.read().decode("utf-8-sig")
     entries = rulesets()
+    # 合并自定义远程规则集
     generated = merge(upstream)
+    # 新增三个手动切换策略组
+    generated = add_manual_groups(generated)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:
         OUTPUT.write_text(generated, encoding="utf-8")
