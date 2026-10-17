@@ -1,3 +1,0 @@
-payload:
-  # 示例规则：替换成你真正需要代理的域名
-  - DOMAIN-SUFFIX,example.org

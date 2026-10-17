@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Fetch ACL4SSR NoAuto and inject repository-local Mihomo classical rule providers."""
+from pathlib import Path
+from urllib.request import urlopen
+import os
+import re
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full_NoAuto.ini"
+OUTPUT = ROOT / "subconverter" / "ACL4SSR_Online_Full_NoAuto.ini"
+REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "1962247851/proxy-configs")
+REF = "main"
+INTERVAL = 3600
+GROUPS = {"DIRECT": "DIRECT", "REJECT": "REJECT", "PROXY": "🚀 节点选择"}
+RULE_TYPES = ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "IP-CIDR", "IP-CIDR6", "GEOIP", "PROCESS-NAME", "PROCESS-PATH", "DST-PORT", "SRC-IP-CIDR", "SRC-PORT", "NETWORK")
+
+
+def rulesets():
+    entries = []
+    for folder, group in GROUPS.items():
+        directory = ROOT / "rules" / folder
+        if not directory.exists():
+            continue
+        for file in sorted(directory.rglob("*.yaml")) + sorted(directory.rglob("*.yml")):
+            if file.is_symlink() or not file.is_file():
+                continue
+            # Lightweight format check without external dependencies.
+            content = file.read_text(encoding="utf-8")
+            if not re.search(r"(?m)^payload:\s*$", content):
+                raise ValueError(f"Invalid rule-provider payload: {file}")
+            if not re.search(r"(?m)^\s+-\s+\S", content):
+                raise ValueError(f"Rule-provider is empty: {file}")
+            relative = file.relative_to(ROOT).as_posix()
+            url = f"https://raw.githubusercontent.com/{REPOSITORY}/{REF}/{relative}"
+            entries.append(f"ruleset={group},clash-classic:{url},{INTERVAL}")
+    if not entries:
+        raise ValueError("No rule files found under rules/DIRECT, rules/REJECT or rules/PROXY")
+    return entries
+
+
+def merge(upstream):
+    lines = upstream.lstrip("\ufeff").splitlines()
+    if not any(line.strip() == "[custom]" for line in lines):
+        raise ValueError("Upstream lacks [custom] section")
+    match_indices = [i for i, line in enumerate(lines) if line.strip().startswith("ruleset=")]
+    if not match_indices:
+        raise ValueError("Upstream lacks ruleset= entries")
+    first = match_indices[0]
+    # Only inject inside [custom] before upstream rules; preserve the rest untouched.
+    if lines.index("[custom]") > first:
+        raise ValueError("Unexpected upstream section order")
+    custom = ["; >>> LOCAL REMOTE RULE PROVIDERS >>>", *rulesets(), "; <<< LOCAL REMOTE RULE PROVIDERS <<<", ""]
+    lines[first:first] = custom
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    with urlopen(SOURCE, timeout=40) as response:
+        upstream = response.read().decode("utf-8-sig")
+    generated = merge(upstream)
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:
+        OUTPUT.write_text(generated, encoding="utf-8")
+        print(f"Updated {OUTPUT.relative_to(ROOT)} with {len(rulesets())} remote rulesets")
+    else:
+        print("No changes")
+
+
+if __name__ == "__main__":
+    main()

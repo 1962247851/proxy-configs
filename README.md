@@ -1,51 +1,59 @@
 # proxy-configs
 
-个人代理配置、Mihomo 远程规则和订阅转换配置。公开仓库不得保存机场订阅 token、私钥或账号。
+个人规则 + ACL4SSR NoAuto 上游同步。GitHub 用户：`1962247851`，默认分支：`main`。
 
-## 目录
+## 结构
 
-- `rules/direct.yaml` 自定义直连规则
-- `rules/reject.yaml` 自定义拦截规则（示例）
-- `rules/proxy.yaml` 自定义代理规则（示例）
-- `mihomo/rule-providers.yaml` Mihomo/OpenClash 可合并的**片段**（不是完整配置）
-- `subconverter/custom-rulesets.ini` SubConverter-Extended 外部配置中 `[rulesets]` 段的**片段**
-- `sub-store/` 预留 JS 覆写
+- `rules/DIRECT/custom.yaml`：12 条直连规则（已包含全部指定域名）
+- `rules/REJECT/`：自定义拦截规则，按需新增 `.yaml`
+- `rules/PROXY/`：走 `🚀 节点选择` 的自定义代理规则，按需新增 `.yaml`
+- `scripts/sync_acl4ssr.py`：扫描目录、下载最新 ACL4SSR NoAuto INI、插入规则引用
+- `.github/workflows/sync-acl4ssr.yml`：每 6 小时 / 规则目录变动 / 手动触发
+- `subconverter/ACL4SSR_Online_Full_NoAuto.ini`：Actions 首次运行**才会生成**，不要手工编辑
 
-## 使用
+## 初次部署
 
-1. 把这些文件上传至自己的 GitHub `proxy-configs` 公开仓库，默认分支 `main`。
-2. 将文本中的 `USER` 替换成 GitHub 用户名。
-3. **两种接入方式择一**，不要重复添加：
-   - 方式 A：使用 SubConverter-Extended，将 `subconverter/custom-rulesets.ini` 的三个 `ruleset=` 行合并到现有外部配置 `[rulesets]` 段最前面，保留其他公共规则和最终 `MATCH`；转换后检查生成 YAML 的 `rule-providers`。
-   - 方式 B：直接修改 Mihomo 主配置，把 `mihomo/rule-providers.yaml` 中的 provider 条目合并到原 `rule-providers`，把 3 条 `RULE-SET` 插入原 `rules` 的前面（在最终 MATCH 前）。
-4. OpenClash 选择 Mihomo/Meta 内核，加载生成/合并后的完整配置。
-5. `rule-providers` 使用 `interval: 3600`，运行中的 Mihomo 会定期尝试从 GitHub 刷新，不需要重新转换整个订阅。
-6. 在 OpenClash 检查运行配置中实际存在 provider 和 RULE-SET；如启用 OpenClash 覆写功能，请确认没有把顺序改掉。
+1. 在 GitHub 创建 **公开**仓库 `1962247851/proxy-configs`，主分支 `main`，上传压缩包**内部的全部文件**（包括 `.github/` 隐藏目录）。
+2. 进入 GitHub **Actions → Sync ACL4SSR NoAuto → Run workflow**，运行成功后确认新建 `subconverter/ACL4SSR_Online_Full_NoAuto.ini`。若提交失败，检查 Settings → Actions → General → Workflow permissions 是否允许 `Read and write permissions`；组织策略可能限制。
+3. 在现有 SubConverter-Extended 订阅链接中，**只替换 `config=`** 为以下 URL 的 URL 编码值；其余 `url`、`target`、`classic` 等参数不变：
 
-**注意**：`rules/*.yaml` 是经典 `payload` 格式，不要通过 `ruleprepend` 导入；这里使用 `clash-classic:` 和 Mihomo 原生 RULE-SET。
+   `https://raw.githubusercontent.com/1962247851/proxy-configs/main/subconverter/ACL4SSR_Online_Full_NoAuto.ini`
 
-### 远程地址
+4. 让 OpenClash **更新一次完整配置订阅**并使用 Mihomo/Meta 内核。检查生成 YAML 的 `rule-providers:` 和 `rules:` 中自定义 `RULE-SET` 位于公共规则之前。
+5. 此后修改现有 `rules/DIRECT/custom.yaml` 内容：Mihomo 按 `3600` 秒定期检查远程规则文件，**不需要重新生成主配置**；增加或删除规则文件则需 OpenClash 再更新一次主订阅以注册/移除 Provider。
 
-`https://raw.githubusercontent.com/USER/proxy-configs/main/rules/direct.yaml`
+## 新增规则集
 
-`https://raw.githubusercontent.com/USER/proxy-configs/main/rules/reject.yaml`
+例如创建 `rules/REJECT/tracker.yaml`：
 
-`https://raw.githubusercontent.com/USER/proxy-configs/main/rules/proxy.yaml`
-
-### 校验
-
-可以在本地运行：
-
-```bash
-python3 -m pip install pyyaml
-python3 - <<'PY'
-from pathlib import Path
-import yaml
-for f in Path('rules').glob('*.yaml'):
-    data = yaml.safe_load(f.read_text(encoding='utf-8'))
-    assert isinstance(data, dict) and isinstance(data.get('payload'), list) and data['payload'], f
-    print(f, len(data['payload']), 'rules OK')
-PY
+```yaml
+payload:
+  - DOMAIN-SUFFIX,tracker.example.com
 ```
 
-完整 Mihomo 配置可以用 `mihomo -t -f config.yaml` 验证（需安装兼容内核）。
+或创建 `rules/PROXY/ai.yaml`：
+
+```yaml
+payload:
+  - DOMAIN-SUFFIX,chatgpt.com
+```
+
+提交后 GitHub Actions 自动把远程 Provider 插入上游模板，随后 OpenClash 主订阅更新即可使用。新文件保持 Mihomo classical 的 `payload` 格式。规则从上到下匹配，优先级高于 ACL4SSR 公共规则。
+
+## 更新流程
+
+- 修改已存在 YAML 的规则内容：Mihomo 原生 `rule-providers` 自动更新；更新间隔 3600 秒，不是立即推送。
+- 新增/删除 YAML：Actions 自动提交更新的 INI；OpenClash 必须更新完整订阅。
+- ACL4SSR 上游修改：Actions 每 6 小时检查；OpenClash 必须更新完整订阅才能应用新模板。
+- 不要修改 Actions 自动生成的 INI，否则下次同步会覆盖。GitHub Actions 定时任务可能延迟或被平台停用；可手动运行。
+
+## 安全
+
+**不要把机场订阅 Token、代理服务器凭据或私钥上传公开 GitHub 仓库。** Actions 不需要机场订阅链接，也不会访问订阅信息。
+
+## 故障排查
+
+- Actions 下载失败：检查 GitHub 到上游 raw.githubusercontent.com 的可用性。
+- Actions 推送失败：检查 Workflow 权限、分支保护规则。
+- SubConverter 没生成远程 `rule-providers`：确认使用兼容的 **SubConverter-Extended** 版本，检查服务日志和生成的完整 YAML。
+- OpenClash 未加载：检查 Mihomo 内核、GitHub Raw 连通性和客户端日志，并确保其他覆写没有清理 `rule-providers`。
