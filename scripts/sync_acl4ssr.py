@@ -18,6 +18,45 @@ RULE_TYPES = ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "IP-C
 LIST_GROUPS = {"DIRECT": "🎯 全球直连", "REJECT": "🛑 全球拦截", "PROXY": "🚀 节点选择"}
 
 
+def add_clash_rule_base(content):
+    base_file = ROOT / "mihomo" / "GeneralClashConfig.yml"
+
+    # 没有自定义基础模板就不启用
+    if not base_file.is_file():
+        return content
+
+    url = (
+        f"https://raw.githubusercontent.com/"
+        f"{REPOSITORY}/{REF}/mihomo/GeneralClashConfig.yml"
+    )
+
+    setting = f"clash_rule_base={url}"
+
+    lines = content.splitlines()
+
+    # 删除已有的 clash_rule_base（包括注释行）
+    lines = [
+        line for line in lines
+        if not re.match(r"^\s*;?\s*clash_rule_base\s*=", line)
+    ]
+
+    # 添加到 [custom] 配置段内
+    index = next(
+        (
+            i for i, line in enumerate(lines)
+            if line.strip() == "[custom]"
+        ),
+        None
+    )
+
+    if index is None:
+        raise ValueError("找不到 [custom] 配置段")
+
+    lines.insert(index + 1, setting)
+
+    return "\n".join(lines) + "\n"
+
+
 def add_manual_groups(content):
     groups = [
         "🚀 手动切换1",
@@ -140,6 +179,8 @@ def main():
     generated = merge(upstream)
     # 新增三个手动切换策略组
     generated = add_manual_groups(generated)
+    # 自动检测并启用自定义 Mihomo 基础配置
+    generated = add_clash_rule_base(generated)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:
         OUTPUT.write_text(generated, encoding="utf-8")
