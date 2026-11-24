@@ -27,6 +27,16 @@ ipv6: true
 # 规则模式：rule（规则） / global（全局代理）/ direct（全局直连）/ script (脚本)
 mode: rule
 
+rule-providers:
+  OrCustom:
+    # Use a separate cache from the former /getruleset YAML provider.
+    type: http
+    behavior: classical
+    format: text
+    url: https://raw.githubusercontent.com/1962247851/proxy-configs/main/rulesets/DIRECT/OrCustom.list
+    path: ./rule_provider/OrCustom-github.list
+    interval: 3600
+
 # 设置日志输出级别 (默认级别：silent，即不输出任何内容，以避免因日志内容过大而导致程序内存溢出）。
 # 5 个级别：silent / error / warning / info / debug。级别越高日志输出量越大，越倾向于调试，若需要请自行开启。
 log-level: info

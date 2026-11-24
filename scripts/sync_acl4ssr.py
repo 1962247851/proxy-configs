@@ -27,7 +27,7 @@ def add_clash_rule_base(content):
 
     url = (
         f"https://raw.githubusercontent.com/"
-        f"{REPOSITORY}/{REF}/mihomo/GeneralClashConfig.yml"
+        f"{REPOSITORY}/{REF}/mihomo/GeneralClashConfig.yml?orcustom_text=1"
     )
 
     setting = f"clash_rule_base={url}"
@@ -148,7 +148,10 @@ def rulesets():
                 raise ValueError(f"Empty .list ruleset: {file}")
             relative = file.relative_to(ROOT).as_posix()
             url = f"https://raw.githubusercontent.com/{REPOSITORY}/{REF}/{relative}"
-            entries.append(f"ruleset={group},{url}")
+            if relative == "rulesets/DIRECT/OrCustom.list" and (ROOT / "mihomo" / "GeneralClashConfig.yml").is_file():
+                entries.append(f"ruleset={group},[]RULE-SET,OrCustom")
+            else:
+                entries.append(f"ruleset={group},{url}")
     if not entries:
         raise ValueError("No rulesets under rules/ or rulesets/")
     return entries
