@@ -10,6 +10,8 @@ SOURCE = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/
 OUTPUT = ROOT / "subconverter" / "ACL4SSR_Online_Full_NoAuto.ini"
 REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "1962247851/proxy-configs")
 REF = "main"
+# Pin the base so a fresh INI cannot be combined with a cached base that lacks OrCustom.
+CLASH_BASE_REF = "bcd2c6a03701c88dda225183de57207fa5d906d9"
 INTERVAL = 3600
 GROUPS = {"DIRECT": "DIRECT", "REJECT": "REJECT", "PROXY": "🚀 节点选择"}
 RULE_TYPES = ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "IP-CIDR", "IP-CIDR6", "GEOIP", "PROCESS-NAME", "PROCESS-PATH", "DST-PORT", "SRC-IP-CIDR", "SRC-PORT", "NETWORK")
@@ -27,7 +29,7 @@ def add_clash_rule_base(content):
 
     url = (
         f"https://raw.githubusercontent.com/"
-        f"{REPOSITORY}/{REF}/mihomo/GeneralClashConfig.yml?orcustom_text=1"
+        f"{REPOSITORY}/{CLASH_BASE_REF}/mihomo/GeneralClashConfig.yml"
     )
 
     setting = f"clash_rule_base={url}"
