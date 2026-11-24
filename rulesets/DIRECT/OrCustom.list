@@ -13,7 +13,7 @@ DOMAIN-SUFFIX,hf.co
 
 # 下载
 DOMAIN-SUFFIX,zenodo.org
-DOMAIN,download-cdn.jetbrains.com
+DOMAIN-SUFFIX,download-cdn.jetbrains.com
 
 # Steam 下载与内容服务
 DOMAIN-SUFFIX,steamcontent.com
