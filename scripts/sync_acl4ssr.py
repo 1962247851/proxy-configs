@@ -64,6 +64,7 @@ def add_manual_groups(content):
         "🚀 手动切换1",
         "🚀 手动切换2",
         "🚀 手动切换3",
+        "🔗 中转专用",
     ]
 
     lines = content.splitlines()
